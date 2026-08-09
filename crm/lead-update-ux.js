@@ -1,108 +1,137 @@
 (function(){
-  function safeText(v){return String(v||'').trim()||'-';}
-  function escAttr(v){return String(v||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
-  function formatNow(){try{return new Date().toLocaleString([], {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return 'Now';}}
-
   function ensureStructure(){
     const modal=document.querySelector('#leadUpdateModal .modal');
     const form=document.getElementById('leadUpdateForm');
-    if(!modal||!form||modal.dataset.uxReady==='1')return;
-    modal.dataset.uxReady='1';
+    if(!modal||!form||modal.dataset.uxV3==='1')return;
+    modal.dataset.uxV3='1';
+
+    const hiddenIds=['luLeadId','luOriginalCustomer'];
+    hiddenIds.forEach(id=>{
+      const el=document.getElementById(id);
+      if(el && el.parentElement!==form) form.prepend(el);
+    });
 
     const head=modal.querySelector('.modal-head');
     if(head){
-      head.innerHTML=`<div class="lu-head-wrap">
-        <div class="lu-head-main">
-          <div class="lu-head-title-row"><b id="leadUpdateTitle">Update Lead</b><span class="lu-chip" id="luHeadPriority">Priority</span><span class="lu-chip stage" id="luHeadStage">Stage</span></div>
-          <div class="lu-head-sub" id="leadUpdateSub">Lead details</div>
-        </div>
-        <div class="lu-head-actions">
-          <button type="button" class="lu-quick-btn" onclick="luQuickCall()">☎ <span>Call</span></button>
-          <button type="button" class="lu-quick-btn wa" onclick="luQuickWhatsApp()">◉ <span>WhatsApp</span></button>
-          <button type="button" class="lu-quick-btn primary-soft" onclick="luGoFollowup()">◷ <span>Reminder</span></button>
-          <button type="button" class="lu-x" onclick="closeLeadUpdate()">×</button>
-        </div>
-      </div>`;
+      head.innerHTML=`
+        <div class="lu3-header">
+          <div class="lu3-title-block">
+            <div class="lu3-kicker">SALES LEAD</div>
+            <div class="lu3-title-row">
+              <b id="leadUpdateTitle">Update Lead</b>
+              <span class="lu3-pill" id="luHeadPriority">Warm</span>
+              <span class="lu3-pill stage" id="luHeadStage">New Lead</span>
+            </div>
+            <div class="lu3-sub" id="leadUpdateSub">Lead details</div>
+          </div>
+          <div class="lu3-actions">
+            <button type="button" class="lu3-action" onclick="luQuickCall()">☎ <span>Call</span></button>
+            <button type="button" class="lu3-action whatsapp" onclick="luQuickWhatsApp()">◉ <span>WhatsApp</span></button>
+            <button type="button" class="lu3-action follow" onclick="switchLeadUpdateTab('follow')">◷ <span>Follow-up</span></button>
+            <button type="button" class="lu3-close" onclick="closeLeadUpdate()">×</button>
+          </div>
+        </div>`;
     }
 
-    const originalBody=form.querySelector('.modal-body');
-    const originalFoot=form.querySelector('.modal-foot');
-    if(!originalBody||!originalFoot)return;
+    const body=form.querySelector('.modal-body');
+    const foot=form.querySelector('.modal-foot');
+    if(!body||!foot)return;
 
-    const byId=id=>originalBody.querySelector('#'+id)?.closest('.field');
-    const take=id=>{const el=byId(id);if(el)el.remove();return el;};
-    const basicIds=['luCustomer','luCompany','luMobile','luWhatsapp','luEmail','luWebsite','luGST'];
-    const leadIds=['luSource','luFabric','luQty','luPriority','luStatus','luSalesperson','luNotes'];
-    const followIds=['luFollowup','luFuTime','luFuType','luFuStatus','luFuDiscussion','luFuNextAction','luFuReminderDate','luFuReminderTime','luFuNotes'];
-    const basics=basicIds.map(take).filter(Boolean);
-    const leadFields=leadIds.map(take).filter(Boolean);
-    const followFields=followIds.map(take).filter(Boolean);
-    const activity=originalBody.querySelector('.lead-log-panel');
+    const field=id=>body.querySelector('#'+id)?.closest('.field');
+    const take=id=>{const el=field(id);if(el)el.remove();return el;};
+    const basic=['luCustomer','luCompany','luMobile','luWhatsapp','luEmail','luWebsite','luGST'].map(take).filter(Boolean);
+    const lead=['luSource','luFabric','luQty','luPriority','luStatus','luSalesperson','luNotes'].map(take).filter(Boolean);
+    const follow=['luFollowup','luFuTime','luFuType','luFuStatus','luFuDiscussion','luFuNextAction','luFuReminderDate','luFuReminderTime','luFuNotes'].map(take).filter(Boolean);
+    const activity=body.querySelector('.lead-log-panel');
     if(activity)activity.remove();
 
-    originalBody.remove();
-    originalFoot.remove();
+    hiddenIds.forEach(id=>{const el=body.querySelector('#'+id);if(el)form.prepend(el);});
+    body.remove();
+    foot.remove();
 
-    const summary=document.createElement('div');summary.className='lu-summary';summary.id='luSummary';summary.innerHTML=`
-      <div class="lu-summary-item"><div class="lu-summary-k">Last Activity</div><div class="lu-summary-v" id="luSummaryLast">-</div></div>
-      <div class="lu-summary-item"><div class="lu-summary-k">Next Follow-up</div><div class="lu-summary-v" id="luSummaryNext">-</div></div>
-      <div class="lu-summary-item"><div class="lu-summary-k">Priority</div><div class="lu-summary-v" id="luSummaryPriority">-</div></div>
-      <div class="lu-summary-item"><div class="lu-summary-k">Stage</div><div class="lu-summary-v" id="luSummaryStage">-</div></div>
-      <div class="lu-summary-item"><div class="lu-summary-k">Assigned To</div><div class="lu-summary-v" id="luSummarySales">Unassigned</div></div>`;
+    const workspace=document.createElement('div');
+    workspace.className='lu3-workspace';
+    workspace.innerHTML=`
+      <aside class="lu3-nav">
+        <div class="lu3-nav-summary">
+          <div class="lu3-avatar" id="lu3Avatar">L</div>
+          <div class="lu3-nav-name" id="lu3ClientName">Lead</div>
+          <div class="lu3-nav-company" id="lu3CompanyName">Company</div>
+        </div>
+        <div class="lu3-nav-list">
+          <button type="button" class="lu3-nav-item active" data-lutab="basic" onclick="switchLeadUpdateTab('basic')"><span>01</span><div><b>Client</b><small>Contact & company</small></div></button>
+          <button type="button" class="lu3-nav-item" data-lutab="lead" onclick="switchLeadUpdateTab('lead')"><span>02</span><div><b>Requirement</b><small>Fabric & pipeline</small></div></button>
+          <button type="button" class="lu3-nav-item" data-lutab="follow" onclick="switchLeadUpdateTab('follow')"><span>03</span><div><b>Follow-up</b><small>Next sales action</small></div></button>
+          <button type="button" class="lu3-nav-item" data-lutab="activity" onclick="switchLeadUpdateTab('activity')"><span>04</span><div><b>Activity</b><small>Lead history</small></div></button>
+        </div>
+        <div class="lu3-nav-meta">
+          <div><span>Next Follow-up</span><b id="luSummaryNext">Not scheduled</b></div>
+          <div><span>Assigned To</span><b id="luSummarySales">Unassigned</b></div>
+        </div>
+      </aside>
+      <section class="lu3-main">
+        <div class="lu3-topstrip">
+          <div><span>Priority</span><b id="luSummaryPriority">-</b></div>
+          <div><span>Pipeline Stage</span><b id="luSummaryStage">-</b></div>
+          <div><span>Last Activity</span><b id="luSummaryLast">No activity</b></div>
+        </div>
+        <div class="lu3-scroll">
+          <div class="lu3-panel active" data-panel="basic"><div class="lu3-panel-head"><div><h3>Client & Company Details</h3><p>Only essential contact information for sales communication.</p></div></div><div class="lu3-grid" id="lu3Basic"></div></div>
+          <div class="lu3-panel" data-panel="lead"><div class="lu3-panel-head"><div><h3>Requirement & Sales Status</h3><p>Qualification, fabric requirement, priority and current pipeline stage.</p></div></div><div class="lu3-grid" id="lu3Lead"></div></div>
+          <div class="lu3-panel" data-panel="follow"><div class="lu3-panel-head"><div><h3>Follow-up & Next Action</h3><p>Record the discussion and schedule exactly what happens next.</p></div></div><div class="lu3-grid" id="lu3Follow"></div></div>
+          <div class="lu3-panel" data-panel="activity"><div class="lu3-panel-head"><div><h3>Activity History</h3><p>Chronological lead history and follow-up actions.</p></div><span class="badge gray" id="leadLogCount">0 logs</span></div><div class="lu3-activity" id="leadUpdateLog"><div class="log-empty">No activity yet.</div></div></div>
+        </div>
+      </section>`;
 
-    const tabs=document.createElement('div');tabs.className='lu-tabs-wrap';tabs.innerHTML=`<div class="lu-tabs">
-      <button type="button" class="lu-tab active" data-lutab="basic" onclick="switchLeadUpdateTab('basic')">1 · Basic Details</button>
-      <button type="button" class="lu-tab" data-lutab="lead" onclick="switchLeadUpdateTab('lead')">2 · Lead Details</button>
-      <button type="button" class="lu-tab" data-lutab="follow" onclick="switchLeadUpdateTab('follow')">3 · Follow-up & Activity</button>
-    </div>`;
+    form.appendChild(workspace);
+    const basicGrid=workspace.querySelector('#lu3Basic');
+    const leadGrid=workspace.querySelector('#lu3Lead');
+    const followGrid=workspace.querySelector('#lu3Follow');
+    basic.forEach(f=>basicGrid.appendChild(f));
+    lead.forEach(f=>{if(f.querySelector('#luNotes'))f.classList.add('wide');leadGrid.appendChild(f);});
+    follow.forEach(f=>{if(['luFuDiscussion','luFuNextAction','luFuNotes'].some(id=>f.querySelector('#'+id)))f.classList.add('wide');followGrid.appendChild(f);});
 
-    const scroll=document.createElement('div');scroll.className='lu-scroll';
-    const basicPanel=document.createElement('div');basicPanel.className='lu-panel active';basicPanel.dataset.panel='basic';basicPanel.innerHTML=`<div class="lu-card"><div class="lu-section-title"><div><h3>Client & Company</h3><p>Keep only essential contact information here.</p></div></div><div class="lu-grid" id="luBasicGrid"></div></div>`;
-    const leadPanel=document.createElement('div');leadPanel.className='lu-panel';leadPanel.dataset.panel='lead';leadPanel.innerHTML=`<div class="lu-card"><div class="lu-section-title"><div><h3>Requirement & Sales Status</h3><p>Everything your sales team needs to qualify and move the lead.</p></div></div><div class="lu-grid" id="luLeadGrid"></div><div class="lu-help-strip"><span class="lu-help-dot"></span>Pipeline, priority and salesperson are visible together so updates are faster.</div></div>`;
-    const followPanel=document.createElement('div');followPanel.className='lu-panel';followPanel.dataset.panel='follow';followPanel.innerHTML=`<div class="lu-follow-grid"><div class="lu-card"><div class="lu-section-title"><div><h3>Follow-up</h3><p>Schedule the next customer action without leaving this window.</p></div></div><div class="lu-grid" id="luFollowGrid"></div></div><div class="lu-card lu-activity-card"><div class="lu-activity-head"><div><h3>Activity Log</h3><div class="lu-empty-note">Lead history in one clean timeline.</div></div><span class="badge gray" id="leadLogCount">0 logs</span></div><div class="lead-log-list" id="leadUpdateLog"><div class="log-empty">No activity yet.</div></div></div></div>`;
-    scroll.append(basicPanel,leadPanel,followPanel);
-    const basicGrid=basicPanel.querySelector('#luBasicGrid'),leadGrid=leadPanel.querySelector('#luLeadGrid'),followGrid=followPanel.querySelector('#luFollowGrid');
-    basics.forEach((f,i)=>{if(i===6)f.classList.add('full');basicGrid.appendChild(f);});
-    leadFields.forEach(f=>{if(f.querySelector('#luNotes'))f.classList.add('full');leadGrid.appendChild(f);});
-    followFields.forEach(f=>{if(['luFuDiscussion','luFuNextAction','luFuNotes'].some(id=>f.querySelector('#'+id)))f.classList.add('full');followGrid.appendChild(f);});
-
-    const footer=document.createElement('div');footer.className='lu-footer';footer.innerHTML=`<div class="lu-footer-note">Changes save to the shared CRM when you click Update Lead.</div><div class="lu-footer-actions"><button type="button" class="btn btn-light" onclick="closeLeadUpdate()">Cancel</button><button type="button" class="btn btn-light" onclick="luSaveDraft()">Save Draft</button><button type="submit" class="btn btn-primary lu-save">Update Lead</button></div>`;
-    form.append(summary,tabs,scroll,footer);
+    const footer=document.createElement('div');
+    footer.className='lu3-footer';
+    footer.innerHTML=`<div class="lu3-save-note">Shared CRM record · changes save for all users</div><div class="lu3-footer-actions"><button type="button" class="btn btn-light" onclick="closeLeadUpdate()">Cancel</button><button type="submit" class="btn btn-primary">Update Lead</button></div>`;
+    form.appendChild(footer);
   }
 
   window.switchLeadUpdateTab=function(tab){
-    document.querySelectorAll('#leadUpdateModal .lu-tab').forEach(b=>b.classList.toggle('active',b.dataset.lutab===tab));
-    document.querySelectorAll('#leadUpdateModal .lu-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===tab));
-    const scroll=document.querySelector('#leadUpdateModal .lu-scroll');if(scroll)scroll.scrollTop=0;
+    document.querySelectorAll('#leadUpdateModal .lu3-nav-item').forEach(b=>b.classList.toggle('active',b.dataset.lutab===tab));
+    document.querySelectorAll('#leadUpdateModal .lu3-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===tab));
+    const sc=document.querySelector('#leadUpdateModal .lu3-scroll');if(sc)sc.scrollTop=0;
   };
-  window.luGoFollowup=function(){switchLeadUpdateTab('follow');setTimeout(()=>document.getElementById('luFollowup')?.focus(),60);};
   window.luQuickCall=function(){const n=(document.getElementById('luMobile')?.value||'').replace(/\D/g,'');if(!n)return alert('Mobile number is not available.');window.location.href='tel:'+n;};
   window.luQuickWhatsApp=function(){let n=(document.getElementById('luWhatsapp')?.value||document.getElementById('luMobile')?.value||'').replace(/\D/g,'');if(!n)return alert('WhatsApp number is not available.');if(n.length===10)n='91'+n;window.open('https://wa.me/'+n,'_blank','noopener,noreferrer');};
-  window.luSaveDraft=function(){try{const id=document.getElementById('luLeadId')?.value;const lead=id?(leads||[]).find(l=>l.id===id):null;if(!lead)return alert('Open an existing lead to save draft.');lead.notes=document.getElementById('luNotes')?.value.trim()||lead.notes||'';lead.followup=document.getElementById('luFollowup')?.value||lead.followup||'-';lead.followupTime=document.getElementById('luFuTime')?.value||'';lead.followupDiscussion=document.getElementById('luFuDiscussion')?.value.trim()||'';save();localStorage.setItem('textileflow_leads',JSON.stringify(leads));alert('Draft saved.');}catch(e){alert('Could not save draft.');}};
 
   function refreshSummary(){
     const val=id=>document.getElementById(id)?.value||'';
-    const priority=val('luPriority')||'Warm',stage=val('luStatus')||'New Lead',sales=val('luSalesperson')||'Unassigned';
+    const priority=val('luPriority')||'Warm';
+    const stage=val('luStatus')||'New Lead';
+    const sales=val('luSalesperson')||'Unassigned';
+    const customer=val('luCustomer')||'Lead';
+    const company=val('luCompany')||'Company';
     const next=[val('luFollowup'),val('luFuTime')].filter(Boolean).join(' · ')||'Not scheduled';
     const log=document.querySelector('#leadUpdateLog .log-item');
     const last=log?.querySelector('.log-meta')?.textContent||log?.querySelector('.log-title')?.textContent||'No activity';
     const set=(id,text)=>{const el=document.getElementById(id);if(el)el.textContent=text;};
-    set('luSummaryLast',last);set('luSummaryNext',next);set('luSummaryPriority',priority);set('luSummaryStage',stage);set('luSummarySales',sales);
-    const hp=document.getElementById('luHeadPriority');if(hp){hp.textContent=priority;hp.className='lu-chip '+priority.toLowerCase();}
+    set('luSummaryNext',next);set('luSummarySales',sales);set('luSummaryPriority',priority);set('luSummaryStage',stage);set('luSummaryLast',last);
+    set('lu3ClientName',customer);set('lu3CompanyName',company);set('lu3Avatar',(customer||company||'L').charAt(0).toUpperCase());
+    const hp=document.getElementById('luHeadPriority');if(hp){hp.textContent=priority;hp.className='lu3-pill '+priority.toLowerCase();}
     const hs=document.getElementById('luHeadStage');if(hs)hs.textContent=stage;
   }
 
-  ['luPriority','luStatus','luSalesperson','luFollowup','luFuTime'].forEach(id=>document.addEventListener('change',e=>{if(e.target?.id===id)refreshSummary();}));
-  const observer=new MutationObserver(()=>{if(document.getElementById('leadUpdateModal')?.classList.contains('open'))refreshSummary();});
-  const modal=document.getElementById('leadUpdateModal');if(modal)observer.observe(modal,{attributes:true,attributeFilter:['class']});
+  document.addEventListener('input',e=>{if(['luCustomer','luCompany','luPriority','luStatus','luSalesperson','luFollowup','luFuTime'].includes(e.target?.id))refreshSummary();});
+  document.addEventListener('change',e=>{if(['luCustomer','luCompany','luPriority','luStatus','luSalesperson','luFollowup','luFuTime'].includes(e.target?.id))refreshSummary();});
 
   try{
-    const oldOpen=openLeadUpdateByCustomer;
-    openLeadUpdateByCustomer=function(){ensureStructure();const r=oldOpen.apply(this,arguments);switchLeadUpdateTab('basic');setTimeout(refreshSummary,40);return r;};
+    const old=openLeadUpdateByCustomer;
+    openLeadUpdateByCustomer=function(){ensureStructure();const r=old.apply(this,arguments);switchLeadUpdateTab('basic');setTimeout(refreshSummary,60);return r;};
   }catch(e){}
   try{
-    const oldById=openLeadUpdateById;
-    openLeadUpdateById=function(){ensureStructure();const r=oldById.apply(this,arguments);switchLeadUpdateTab('basic');setTimeout(refreshSummary,40);return r;};
+    const old=openLeadUpdateById;
+    openLeadUpdateById=function(){ensureStructure();const r=old.apply(this,arguments);switchLeadUpdateTab('basic');setTimeout(refreshSummary,60);return r;};
   }catch(e){}
 
   ensureStructure();
