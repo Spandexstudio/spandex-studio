@@ -2,7 +2,7 @@
   const fieldIds={
     basic:['luCustomer','luCompany','luMobile','luWhatsapp','luEmail','luWebsite','luGST'],
     lead:['luSource','luFabric','luQty','luPriority','luStatus','luSalesperson','luNotes'],
-    follow:['luFollowup','luFuTime','luFuType','luFuStatus','luFuDiscussion','luFuNextAction','luFuReminderDate','luFuReminderTime','luFuNotes']
+    follow:['luFollowup','luFuTime','luFuType','luFuStatus','luFuDiscussion','luFuNextAction','luFuNotes']
   };
 
   function detachField(form,id){
@@ -10,6 +10,18 @@
     const f=input?.closest('.field');
     if(f){f.remove();return f;}
     return null;
+  }
+
+  function enableNativePicker(id){
+    const input=document.getElementById(id);
+    if(!input||input.dataset.fullPicker==='1')return;
+    input.dataset.fullPicker='1';
+    input.style.cursor='pointer';
+    const openPicker=()=>{
+      try{if(typeof input.showPicker==='function')input.showPicker();}catch(e){}
+    };
+    input.addEventListener('click',openPicker);
+    input.addEventListener('focus',openPicker);
   }
 
   function buildStructure(){
@@ -22,6 +34,18 @@
       fields[group]=ids.map(id=>detachField(form,id)).filter(Boolean);
     });
 
+    // Keep reminder values available for legacy save/sync code, but do not show them in the UI.
+    const legacyHidden=[];
+    ['luFuReminderDate','luFuReminderTime'].forEach(id=>{
+      const field=detachField(form,id);
+      const input=field?.querySelector('#'+id);
+      if(input){
+        input.type='hidden';
+        input.removeAttribute('required');
+        legacyHidden.push(input);
+      }
+    });
+
     const hidden=[];
     ['luLeadId','luOriginalCustomer'].forEach(id=>{
       const el=form.querySelector('#'+id)||document.getElementById(id);
@@ -31,6 +55,7 @@
     modal.querySelectorAll('#leadUpdateLog,#leadLogCount').forEach(el=>el.remove());
     form.innerHTML='';
     hidden.forEach(el=>form.appendChild(el));
+    legacyHidden.forEach(el=>form.appendChild(el));
 
     const head=modal.querySelector('.modal-head');
     if(head){
@@ -100,7 +125,7 @@
           </div>
           <div class="lu4-panel" data-panel="follow">
             <div class="lu4-card">
-              <div class="lu4-cardhead"><div><h3>Follow-up & Next Action</h3><p>Record the conversation and schedule exactly what should happen next.</p></div></div>
+              <div class="lu4-cardhead"><div><h3>Follow-up & Next Action</h3><p>Select the next follow-up date and time, then record the sales action.</p></div></div>
               <div class="lu4-grid" id="lu4Follow"></div>
             </div>
           </div>
@@ -122,6 +147,9 @@
     fields.lead.forEach(f=>{if(f.querySelector('#luNotes'))f.classList.add('wide');lead.appendChild(f);});
     fields.follow.forEach(f=>{if(['luFuDiscussion','luFuNextAction','luFuNotes'].some(id=>f.querySelector('#'+id)))f.classList.add('wide');follow.appendChild(f);});
 
+    enableNativePicker('luFollowup');
+    enableNativePicker('luFuTime');
+
     const footer=document.createElement('div');
     footer.className='lu4-footer';
     footer.innerHTML=`
@@ -139,6 +167,10 @@
     document.querySelectorAll('#leadUpdateModal .lu4-tab').forEach(b=>b.classList.toggle('active',b.dataset.lutab===tab));
     document.querySelectorAll('#leadUpdateModal .lu4-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===tab));
     const sc=document.querySelector('#leadUpdateModal .lu4-scroll');if(sc)sc.scrollTop=0;
+    if(tab==='follow'){
+      enableNativePicker('luFollowup');
+      enableNativePicker('luFuTime');
+    }
   };
 
   window.luQuickCall=function(){
@@ -185,7 +217,7 @@
       buildStructure();
       const r=old.apply(this,arguments);
       switchLeadUpdateTab('basic');
-      setTimeout(refreshSummary,40);
+      setTimeout(()=>{refreshSummary();enableNativePicker('luFollowup');enableNativePicker('luFuTime');},40);
       return r;
     };
   }catch(e){}
@@ -195,7 +227,7 @@
     openLeadUpdateById=function(){
       buildStructure();
       const r=old.apply(this,arguments);
-      setTimeout(refreshSummary,40);
+      setTimeout(()=>{refreshSummary();enableNativePicker('luFollowup');enableNativePicker('luFuTime');},40);
       return r;
     };
   }catch(e){}
