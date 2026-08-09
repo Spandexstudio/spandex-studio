@@ -1,15 +1,30 @@
 (function(){
   function byId(id){ return document.getElementById(id); }
 
+  function leadList(){
+    try {
+      if (typeof leads !== 'undefined' && Array.isArray(leads)) return leads;
+    } catch(_e) {}
+    return Array.isArray(window.leads) ? window.leads : [];
+  }
+
   function findLead(){
     var id = byId('luLeadId') && byId('luLeadId').value;
     var originalCustomer = byId('luOriginalCustomer') && byId('luOriginalCustomer').value;
-    var arr = Array.isArray(window.leads) ? window.leads : [];
+    var arr = leadList();
     var lead = arr.find(function(x){ return String((x && x.id) || '') === String(id || ''); });
     if (!lead && originalCustomer) {
-      lead = arr.find(function(x){ return String((x && x.customer) || '').trim() === String(originalCustomer).trim(); });
+      lead = arr.find(function(x){
+        return String((x && (x.company || x.customer)) || '').trim() === String(originalCustomer).trim();
+      });
     }
     return lead || null;
+  }
+
+  function findLeadById(id){
+    return leadList().find(function(x){
+      return String((x && x.id) || '') === String(id || '');
+    }) || null;
   }
 
   function captureStage(){
@@ -57,22 +72,57 @@
     }, true);
   }
 
-  function wrapOpen(name){
-    var old = window[name];
-    if (typeof old !== 'function' || old.__tfPipelineGuardWrapped) return;
+  function afterOpen(){
+    setTimeout(function(){ bind(); captureStage(); }, 0);
+  }
+
+  function wrapCustomerOpen(){
+    var old = window.openLeadUpdateByCustomer;
+    if (typeof old !== 'function' || old.__tfFollowupGuardWrapped) return;
     function wrapped(){
       var r = old.apply(this, arguments);
-      setTimeout(function(){ bind(); captureStage(); }, 0);
+      afterOpen();
       return r;
     }
-    wrapped.__tfPipelineGuardWrapped = true;
-    window[name] = wrapped;
+    wrapped.__tfFollowupGuardWrapped = true;
+    window.openLeadUpdateByCustomer = wrapped;
+  }
+
+  function currentReturnContext(){
+    var active = document.querySelector('.view.active, .page.active, [data-view].active');
+    var id = String((active && (active.id || active.getAttribute('data-view'))) || '').toLowerCase();
+    if (id.indexOf('pipeline') >= 0) return 'pipeline';
+    if (id.indexOf('follow') >= 0) return 'followups';
+    return 'leads';
+  }
+
+  function wrapIdOpen(){
+    var old = window.openLeadUpdateById;
+    if (typeof old !== 'function' || old.__tfFollowupGuardWrapped) return;
+    function wrapped(id){
+      var context = currentReturnContext();
+      var lead = findLeadById(id);
+
+      // The original openLeadUpdateById hard-codes the return context to Pipeline.
+      // Bypass that behavior unless the user actually opened the lead from Pipeline.
+      if (context !== 'pipeline' && lead && typeof window.openLeadUpdateByCustomer === 'function') {
+        var r = window.openLeadUpdateByCustomer(lead.company || lead.customer, context, id);
+        afterOpen();
+        return r;
+      }
+
+      var result = old.apply(this, arguments);
+      afterOpen();
+      return result;
+    }
+    wrapped.__tfFollowupGuardWrapped = true;
+    window.openLeadUpdateById = wrapped;
   }
 
   function init(){
     bind();
-    wrapOpen('openLeadUpdateByCustomer');
-    wrapOpen('openLeadUpdateById');
+    wrapCustomerOpen();
+    wrapIdOpen();
   }
 
   if (document.readyState === 'loading') {
